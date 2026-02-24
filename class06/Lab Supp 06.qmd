@@ -1,0 +1,179 @@
+---
+title: "Lab Supp 06"
+author: "Ethan Arevalo"
+format: pdf
+---
+
+```{r}
+install.packages("bio3d")
+```
+
+```{r}
+library(bio3d)
+```
+
+
+# Can you improve this analysis code?
+
+```{r}
+library(bio3d)
+s1 <- read.pdb("4AKE") # kinase with drug
+s2 <- read.pdb("1AKE") # kinase no drug
+s3 <- read.pdb("1E4Y") # kinase with drug
+s1.chainA <- trim.pdb(s1, chain="A", elety="CA")
+s2.chainA <- trim.pdb(s2, chain="A", elety="CA")
+s3.chainA <- trim.pdb(s1, chain="A", elety="CA")
+s1.b <- s1.chainA$atom$b
+s2.b <- s2.chainA$atom$b
+s3.b <- s3.chainA$atom$b
+plotb3(s1.b, sse=s1.chainA, typ="l", ylab="Bfactor")
+plotb3(s2.b, sse=s2.chainA, typ="l", ylab="Bfactor")
+plotb3(s3.b, sse=s3.chainA, typ="l", ylab="Bfactor")
+```
+
+```{r}
+hc <- hclust( dist( rbind(s1.b, s2.b, s3.b) ) )
+plot(hc)
+```
+
+
+```{r}
+# -------------------------------------------------
+#  Bio3D B‑factor comparison for three kinase structures
+# -------------------------------------------------
+library(bio3d)
+
+# ---- 1. Load the PDB files -------------------------------------------------
+# 4AKE – kinase with drug
+# 1AKE – kinase without drug
+# 1E4Y – another kinase with drug
+pdb1 <- read.pdb("4AKE")   # drug‑bound
+pdb2 <- read.pdb("1AKE")   # apo
+pdb3 <- read.pdb("1E4Y")   # drug‑bound (different ligand)
+
+# ---- 2. Extract only CA atoms from chain A -------------------------------
+trim_ca <- function(pdb, chain = "A") {
+  trim.pdb(pdb, chain = chain, elety = "CA")
+}
+ca1 <- trim_ca(pdb1)
+ca2 <- trim_ca(pdb2)
+ca3 <- trim_ca(pdb3)
+
+# ---- 3. Pull out the B‑factor (temperature factor) vectors ---------------
+b1 <- ca1$atom$b
+b2 <- ca2$atom$b
+b3 <- ca3$atom$b
+
+# ---- 4. Basic sanity checks ------------------------------------------------
+stopifnot(length(b1) == length(b2), length(b2) == length(b3))
+# All three structures have the same number of CA atoms in chain A;
+# if they differ, you’ll need to align them first.
+
+# ---- 5. Create a data frame for easy plotting ----------------------------
+df <- data.frame(
+  Residue = ca1$atom$resno,
+  Bfactor_4AKE = b1,
+  Bfactor_1AKE = b2,
+  Bfactor_1E4Y = b3
+)
+
+# ---- 6. Plot with base R (overlaid) ----------------------------------------
+# Use different colours and a legend for quick visual comparison
+plot(df$Residue, df$Bfactor_4AKE, type = "l", col = "red",
+     xlab = "Residue number (CA)", ylab = "B‑factor",
+     main = "B‑factor profiles (Chain A, CA atoms)")
+lines(df$Residue, df$Bfactor_1AKE, col = "blue")
+lines(df$Residue, df$Bfactor_1E4Y, col = "darkgreen")
+legend("topright", legend = c("4AKE (drug)", "1AKE (apo)", "1E4Y (drug)"),
+       col = c("red", "blue", "darkgreen"), lty = 1, cex = 0.8)
+
+# ---- 7. Optional: a ggplot2 version for a more polished look -------------
+# (Uncomment the following block if you prefer ggplot2)
+
+# library(ggplot2)
+# df_long <- reshape2::melt(df, id.vars = "Residue",
+#                           variable.name = "Structure",
+#                           value.name = "Bfactor")
+# ggplot(df_long, aes(x = Residue, y = Bfactor, colour = Structure)) +
+#   geom_line() +
+#   labs(title = "B‑factor comparison across three kinase structures",
+#        x = "Residue number (CA)", y = "B‑factor") +
+#   theme_minimal()
+```
+
+```{r}
+# -------------------------------------------------
+#  Generic B‑factor comparison for any set of PDBs
+# -------------------------------------------------
+library(bio3d)
+
+# ---- 1. Core function -------------------------------------------------
+compare_bfactors <- function(pdb_files,
+                             chain = "A",
+                             align = FALSE,
+                             plot_type = c("base", "ggplot2")) {
+  plot_type <- match.arg(plot_type)
+  
+  # ---- Input checks -------------------------------------------------
+  if (!all(file.exists(pdb_files))) {
+    stop("One or more PDB files could not be found.")
+  }
+  
+  # ---- 2. Load and trim each structure -------------------------------
+  structures <- lapply(pdb_files, function(f) {
+    pdb   <- read.pdb(f)
+    trim.pdb(pdb, chain = chain, elety = "CA")
+  })
+  
+  # ---- 3. (Optional) Align all structures to the first ---------------
+  if (align) {
+    ref <- structures[[1]]$xyz
+    structures <- lapply(structures, function(st) {
+      xyz_aln <- fit.xyz(ref, st$xyz)
+      st$xyz  <- xyz_aln
+      st
+    })
+  }
+  
+  # ---- 4. Extract B‑factors and residue numbers ----------------------
+  bf_list <- lapply(structures, function(st) {
+    list(resno = st$atom$resno,
+         bfac  = st$atom$b)
+  })
+  
+  # ---- 5. Build a tidy data frame ------------------------------------
+  df <- do.call(rbind,
+                lapply(seq_along(bf_list), function(i) {
+                  data.frame(
+                    Structure = tools::file_path_sans_ext(basename(pdb_files[i])),
+                    Residue   = bf_list[[i]]$resno,
+                    Bfactor   = bf_list[[i]]$bfac,
+                    stringsAsFactors = FALSE
+                  )
+                }))
+  
+  # ---- 6. Plot -------------------------------------------------------
+  if (plot_type == "base") {
+    # Base‑R line plot
+    pal <- rainbow(length(pdb_files))
+    plot(NULL, xlim = range(df$Residue), ylim = range(df$Bfactor),
+         xlab = "Residue number (CA)", ylab = "B‑factor",
+         main = "B‑factor profiles (chain ", chain, ")", type = "n")
+    for (i in seq_along(pdb_files)) {
+      sub <- subset(df, Structure == tools::file_path_sans_ext(basename(pdb_files[i])))
+      lines(sub$Residue, sub$Bfactor, col = pal[i])
+    }
+    legend("topright", legend = tools::file_path_sans_ext(basename(pdb_files)),
+           col = pal, lty = 1, cex = 0.8)
+  } else {
+    # ggplot2 version (requires the package)
+    library(ggplot2)
+    ggplot(df, aes(x = Residue, y = Bfactor, colour = Structure)) +
+      geom_line() +
+      labs(title = paste0("B‑factor comparison (chain ", chain, ")"),
+           x = "Residue number (CA)", y = "B‑factor") +
+      theme_minimal()
+  }
+}
+```
+
