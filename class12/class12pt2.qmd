@@ -1,0 +1,44 @@
+---
+title: "class12pt2: Population Analysis"
+author: "Ethan Arevalo (A17393064)"
+format: pdf
+toc: TRUE
+---
+
+> Q13: Read this file into R and determine the sample size for each genotype and their
+corresponding median expression levels for each of these genotypes
+
+```{r}
+expr <- read.table("rs8067378_ENSG00000172057.6.txt")
+head(expr)
+```
+
+```{r}
+nrow(expr)
+```
+
+```{r}
+table(expr$geno)
+```
+
+```{r}
+median(expr$exp)
+```
+
+```{r}
+summary(expr)
+```
+
+> Q14: Generate a boxplot with a box per genotype, what could you infer from the relative
+expression value between A/A and G/G displayed in this plot? Does the SNP effect the
+expression of ORMDL3?
+
+```{r}
+library(ggplot2)
+
+ggplot(expr) +
+  aes(x=geno, y=exp, fill=geno) +
+  geom_boxplot(notch=TRUE)
+```
+
+The A|A allele displays a higher expression to the ORMDL3 gene whereas the G|G alelle is shown to hinder its expression. Therefore, the SNP does effect the expression of ORMDL3
