@@ -1,0 +1,7 @@
+---
+title: "class19"
+author: "Ethan Arevalo (A17393064)"
+format: pdf
+toc: TRUE
+---
+
